@@ -1,116 +1,172 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/zap-wordmark-dark.png">
-    <img src="assets/logo/zap-wordmark-light.png" alt="zap" width="420">
-  </picture>
+  <img src="assets/banner.png" alt="zap: say it in words, get the command" width="100%">
 </p>
 
-<p align="center">Say what you want in Terminal. Zap writes the command, you hit <code>y</code>.</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-13%2B-111?style=flat-square&logo=apple&logoColor=white" alt="macOS 13+">
+  <img src="https://img.shields.io/badge/shell-zsh-111?style=flat-square&logo=gnubash&logoColor=FFD400" alt="zsh">
+  <img src="https://img.shields.io/badge/answers_in-~0.5s-FFD400?style=flat-square&labelColor=111" alt="answers in about half a second">
+  <img src="https://img.shields.io/badge/price-free-FFD400?style=flat-square&labelColor=111" alt="free">
+  <img src="https://img.shields.io/badge/license-MIT-111?style=flat-square" alt="MIT">
+</p>
 
----
+<p align="center">
+  <b>Stop googling terminal commands.</b><br>
+  Type what you want in plain words, Zap turns it into the right command for your Mac, and you hit <code>y</code>.
+</p>
 
-I kept googling the same things: how to find big files, how to kill whatever is on port 3000, the right ffmpeg flags. So I made this. You type what you want in plain words and Zap asks the AI you already have on your Mac (Claude Code, Codex, Gemini CLI or Ollama) to write the command. You see it before anything runs.
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#how-you-use-it">How you use it</a> ·
+  <a href="#pick-a-brain">Pick a brain</a> ·
+  <a href="#meet-flash">Meet Flash</a> ·
+  <a href="#faq">FAQ</a>
+</p>
 
-```
-$ /zap find every video over 1GB on my desktop
+<br>
 
-  ⚡ find ~/Desktop -type f \( -iname '*.mp4' -o -iname '*.mov' \) -size +1G
+<p align="center">
+  <img src="assets/demo.png" alt="zap running in Terminal" width="88%">
+</p>
 
-  run it? [y/N/e] y
-/Users/me/Desktop/render_final_v3.mov
-```
+## Why I made this
 
-## Meet Flash
+Every week I'd end up googling the same things. How do I find big files again? What's the `ffmpeg` flag for that? Why does `sed -i` break on a Mac? Which process is sitting on port 3000?
 
-<img src="assets/flash/flash.gif" width="160" align="right">
+The answer is always one line, but finding it takes five minutes and three Stack Overflow tabs. So I made Zap: you describe the thing, it writes the line, you look at it, and it runs. It works with the AI you already have, it's free, and the fast option answers before you've let go of Enter.
 
-Flash lives in your terminal. While the AI is working out your command he crackles and blinks next to your prompt, then gets out of the way the moment the answer shows up. Type `zap` on its own to say hi.
+## What it does
+
+|  |  |
+|---|---|
+| ⚡ **Fast** | With Groq or Cerebras the command is back in about half a second. |
+| 👀 **Shows before it runs** | You always see the command first. `y` runs it, `e` edits it, anything else cancels. |
+| 🛑 **Careful with risky stuff** | `rm`, `sudo`, `dd`, `git push --force` and friends show up red, and you have to type `yes` in full. |
+| 🔁 **Fixes its own mistakes** | If a command fails, Zap sends the error back and gets you a fixed version. |
+| 📁 **Knows where you are** | It sees your current folder and the tools you have installed, so it won't reach for `ffmpeg` if you don't have it. |
+| 🍎 **Speaks Mac** | BSD `sed`, `stat -f`, `open -a`, `osascript`. It writes commands that actually work on macOS. |
+| ⬆️ **Remembers** | The real command goes into your shell history, so the up arrow brings it back next time. |
+| 🧭 **Real `cd`** | Zap runs inside your shell, so `/zap take me to my downloads` actually takes you there. |
 
 ## Install
 
-1. Download `Zap.dmg` from [Releases](../../releases) and drag Zap into Applications.
-2. Open it. The first time, macOS will block it because it isn't from the App Store: go to **System Settings → Privacy & Security** and click **Open Anyway**.
-3. Pick the AI you want to use and click **Connect**. If you picked Claude Code and you're not signed in, Zap opens the sign-in for you and carries on once you're done.
+1. Download **`Zap.dmg`** from [Releases](../../releases) and drag Zap into Applications.
+2. Open it. The first time, macOS blocks apps that aren't from the App Store: go to **System Settings → Privacy & Security** and click **Open Anyway**.
+3. Pick a brain and a model, then click **Connect**.
 4. Open a new Terminal window and type `/zap` followed by whatever you want.
 
-Pick a brain and a model in the app. Groq is the default because it's free and answers in about half a second. Groq and Cerebras need a free key (paste it in the app; it's stored in `~/.zap/keys`, readable only by you). The others use tools you already have installed:
-
-| AI | Speed | Cost | Get it |
-|---|---|---|---|
-| Groq | ~0.5 s | free key | [console.groq.com/keys](https://console.groq.com/keys) |
-| Cerebras | ~0.5 s | free key | [cloud.cerebras.ai](https://cloud.cerebras.ai) |
-| Claude Code | ~4 s | Claude subscription | [docs](https://docs.anthropic.com/en/docs/claude-code/setup) |
-| Codex | slow | ChatGPT account | [github.com/openai/codex](https://github.com/openai/codex) |
-| Gemini CLI | slow | free with a Google account | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) |
-| Ollama | ~2 s | free, runs offline | [ollama.com](https://ollama.com/download) |
-
-### Without the app
+<details>
+<summary><b>Install without the app</b></summary>
 
 ```sh
-git clone https://github.com/<you>/zap.git
+git clone https://github.com/Louai-Ulaval/zap.git
 cd zap
-./scripts/install.sh --provider ollama --model llama3.2
+./scripts/install.sh --provider groq
+echo 'GROQ_API_KEY=your-key-here' >> ~/.zap/keys && chmod 600 ~/.zap/keys
 ```
 
-## Using it
+</details>
+
+## How you use it
 
 ```
-/zap convert all the pngs here to jpg
+/zap convert every png in this folder to jpg
 /zap what's using port 3000? kill it
 /zap make a folder for each month of 2026
-/zap zip this folder without the node_modules
+/zap zip this folder without node_modules
+/zap open spotify
+/zap how much space is left on my disk
 ```
 
-When the command shows up:
+No quotes needed. Apostrophes, question marks, whatever: just type like you'd text someone.
 
-- `y` runs it
-- `e` lets you edit it first
-- anything else cancels
-
-If you'd rather not be asked every time, turn on **Run safe commands without asking** in the app (or `zap --auto on`). Safe commands then run right away. Anything risky still stops and asks.
-
-A few things it does for you:
-
-- **Shows before it runs.** Nothing happens until you say so.
-- **Warns you about risky stuff.** Anything with `rm`, `sudo`, `dd`, `git push --force` and similar shows in red, and you have to type `yes` in full.
-- **Fixes its own mistakes.** If the command fails, Zap can send the error back and get a fixed version (up to 3 tries).
-- **Knows where you are.** It sees your current folder and which tools you have installed, so it won't use `ffmpeg` if you don't have it.
-- **Plays nice with history.** The real command lands in your shell history, so arrow-up gives it back next time.
-- **Works with `cd`.** Zap runs in your shell, so `/zap go to my downloads` actually takes you there.
-
-Other commands:
+Don't want to press `y` every time? Turn on **Run safe commands right away** in the app, or run `zap --auto on`. Safe commands then run straight away. Risky ones still stop and ask.
 
 ```
-zap --use groq openai/gpt-oss-20b   switch brain/model (or open Zap.app)
-zap --auto on                       run safe commands without asking
+zap                                 say hi to Flash, see the help
+zap --use groq openai/gpt-oss-20b   switch brain or model
+zap --auto on|off                   run safe commands without asking
 zap --history                       what you ran lately
-zap --version
 ```
 
-Settings are in `~/.zap/config`.
+## Pick a brain
 
-## Uninstall
+Zap doesn't come with its own AI. It uses one you already have, or a free one you can get in a minute.
 
-Open Zap.app and click **Uninstall**, or run `./scripts/install.sh --uninstall`. It removes `~/.zap` and the two lines it added to `~/.zshrc`.
+| Brain | Speed | Cost | What you need |
+|---|---|---|---|
+| **Groq** ⭐ | ~0.5 s | free | a free key from [console.groq.com/keys](https://console.groq.com/keys) |
+| **Cerebras** | ~0.5 s | free | a free key from [cloud.cerebras.ai](https://cloud.cerebras.ai) |
+| **Claude Code** | ~4 s | your Claude plan | [Claude Code](https://docs.anthropic.com/en/docs/claude-code/setup) installed. Zap signs you in if needed |
+| **Ollama** | ~2 s | free, offline | [Ollama](https://ollama.com/download) and any model |
+| **Codex** | slower | your ChatGPT plan | [Codex CLI](https://github.com/openai/codex) |
+| **Gemini CLI** | slower | free | [Gemini CLI](https://github.com/google-gemini/gemini-cli) |
+
+Every brain has a model menu in the app. For Groq and Cerebras the list comes live from their API, so new models show up on their own. Keys stay on your Mac in `~/.zap/keys`, readable only by you.
+
+## Meet Flash
+
+<img src="assets/flash/flash.gif" width="150" align="right" alt="Flash">
+
+Flash is the little bolt who lives in your terminal. While the AI is working, he crackles, blinks and winks right under your prompt. The moment your command is ready, he's gone.
+
+He's drawn with nothing but text: every pixel is a coloured half block (`▀`), two pixels per character row, 256 colours, so he works in the stock macOS Terminal with no images or plugins. Type `zap` on its own to say hi.
+
+<br clear="right">
+
+## FAQ
+
+<details>
+<summary><b>Is it safe?</b></summary>
+<br>
+Nothing runs until you've seen it. With auto-run on, only commands Zap considers safe run straight away. Anything that deletes, uses <code>sudo</code>, force-pushes, wipes disks or pipes a download into a shell always stops and asks you to type <code>yes</code>. Still, read what you run.
+</details>
+
+<details>
+<summary><b>What gets sent to the AI?</b></summary>
+<br>
+Your request, your current folder path, up to 40 file names from that folder, your macOS version, and which common tools you have installed. Nothing else. With Ollama, nothing leaves your Mac at all.
+</details>
+
+<details>
+<summary><b>Why <code>/zap</code> with a slash?</b></summary>
+<br>
+It feels like a slash command in a chat app, and it lets Zap grab the whole line before zsh tries to read it. That's why apostrophes and <code>?</code> just work. Plain <code>zap</code> works too.
+</details>
+
+<details>
+<summary><b>Bash? fish?</b></summary>
+<br>
+zsh only for now. It's been the default shell on macOS since Catalina.
+</details>
+
+<details>
+<summary><b>How do I uninstall it?</b></summary>
+<br>
+Open Zap and click <b>Uninstall</b>, or run <code>./scripts/install.sh --uninstall</code>. It removes <code>~/.zap</code> and the two lines it added to <code>~/.zshrc</code>.
+</details>
 
 ## Build it yourself
 
 You need the Xcode command line tools (`xcode-select --install`).
 
 ```sh
-./scripts/build-dmg.sh
+./scripts/build-dmg.sh      # → build/Zap.app and build/Zap-<version>.dmg (Apple Silicon + Intel)
 ```
 
-That gives you `build/Zap.app` and `build/Zap-<version>.dmg`, built for both Apple Silicon and Intel.
+```
+shell/zap.zsh            everything that happens in Terminal, Flash included
+app/ZapSetup.swift       the setup window
+scripts/install.sh       installs zap into ~/.zap and hooks it into ~/.zshrc
+scripts/build-dmg.sh     builds the app and the dmg
+scripts/render-flash.py  turns Flash's pixel rows into the PNGs and GIF
+scripts/make-art.py      makes the banner and demo images
+```
 
-## How it works
-
-- `shell/zap.zsh` is everything that happens in Terminal. It's plain zsh, nothing to compile. Flash is drawn there too, one character per pixel, using half blocks so two pixels fit in one row (`scripts/render-flash.py` turns the same rows into the PNG and GIF).
-- `app/ZapSetup.swift` is the setup window. It finds which AI tools you have, checks the one you pick actually answers, then runs `scripts/install.sh`.
-- `/zap` works because Zap hooks into the Enter key: a line starting with `/zap` gets quoted and passed to the `zap` function before zsh sees it. That's also why you can type apostrophes and question marks without quotes.
-
-Only zsh is supported for now (it's been the default on macOS since Catalina).
+`/zap` works by hooking the Enter key: a line that starts with `/zap` gets quoted and handed to the `zap` function before zsh ever parses it.
 
 ## License
 
-MIT
+MIT. Do whatever you like with it.
+
+<p align="center"><br><img src="assets/flash/flash-wink.png" width="48" alt=""><br><sub>made on a Mac, for Macs</sub></p>
