@@ -88,7 +88,7 @@ enum Shell {
 
 @MainActor
 final class Setup: ObservableObject {
-    enum Stage { case scanning, pick, testing, done }
+    enum Stage { case scanning, pick, signingIn, testing, done }
 
     @Published var stage = Stage.scanning
     @Published var found: [String: String] = [:]
@@ -97,6 +97,8 @@ final class Setup: ObservableObject {
     @Published var ollamaModels: [String] = []
     @Published var error: String?
     @Published var active = ""
+    @Published var autoRun = false
+    private var signInTask: Task<Void, Never>?
 
     let resources = Bundle.main.resourcePath ?? "."
     let configPath = NSHomeDirectory() + "/.zap/config"
@@ -126,6 +128,7 @@ final class Setup: ObservableObject {
             }, uniquingKeysWith: { a, _ in a })
             selected = cfg["ZAP_PROVIDER"]
             model = cfg["ZAP_MODEL"] ?? ""
+            autoRun = cfg["ZAP_AUTORUN"] == "1"
             updateActive()
             stage = .done
         } else {
@@ -150,6 +153,19 @@ final class Setup: ObservableObject {
         stage = .testing
         error = nil
 
+        // Claude Code: sign in first if needed, then carry on by ourselves
+        if id == "claude", !(await claudeSignedIn()) {
+            await signInToClaude()
+            guard await claudeSignedIn() else {
+                if stage == .signingIn {
+                    error = "Didn't see a sign-in. Click Connect to try again."
+                    stage = .pick
+                }
+                return
+            }
+            stage = .testing
+        }
+
         let m = model.trimmingCharacters(in: .whitespaces)
         let test = await Shell.run("""
             ZAP_PROVIDER=\(id) ZAP_MODEL=\(Shell.quote(m))
@@ -163,7 +179,7 @@ final class Setup: ObservableObject {
             return
         }
 
-        let install = await Shell.run("zsh \(Shell.quote(resources + "/install.sh")) --provider \(id) --model \(Shell.quote(m))")
+        let install = await Shell.run("zsh \(Shell.quote(resources + "/install.sh")) --provider \(id) --model \(Shell.quote(m)) --auto \(autoRun ? 1 : 0)")
         guard install.ok else {
             error = install.out
             stage = .pick
@@ -171,6 +187,50 @@ final class Setup: ObservableObject {
         }
         updateActive()
         stage = .done
+    }
+
+    func claudeSignedIn() async -> Bool {
+        let r = await Shell.run("claude auth status", timeout: 20)
+        return r.out.replacingOccurrences(of: " ", with: "").contains("\"loggedIn\":true")
+    }
+
+    /// Opens `claude auth login` in a Terminal window (it needs a real terminal
+    /// for the browser hand-off) and waits up to 5 minutes for it to finish.
+    func signInToClaude() async {
+        stage = .signingIn
+        let bin = found["claude"] ?? "claude"
+        let script = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("zap-sign-in.command")
+        let body = """
+            #!/bin/zsh
+            clear
+            print "Sign in to Claude in the browser window that opens."
+            print "Zap will pick it up by itself once you're done.\\n"
+            \(Shell.quote(bin)) auth login
+            print "\\nAll set. You can close this window."
+            """
+        try? body.write(to: script, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        NSWorkspace.shared.open(script)
+
+        for _ in 0..<100 {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if stage != .signingIn { return }   // cancelled
+            if await claudeSignedIn() { return }
+        }
+    }
+
+    func cancelSignIn() {
+        stage = .pick
+    }
+
+    func setAutoRun(_ on: Bool) {
+        autoRun = on
+        let path = configPath
+        guard var text = try? String(contentsOfFile: path, encoding: .utf8) else { return }
+        var lines = text.split(separator: "\n").map(String.init).filter { !$0.hasPrefix("ZAP_AUTORUN=") }
+        lines.append("ZAP_AUTORUN=\(on ? 1 : 0)")
+        text = lines.joined(separator: "\n") + "\n"
+        try? text.write(toFile: path, atomically: true, encoding: .utf8)
     }
 
     func uninstall() async {
@@ -213,6 +273,7 @@ struct SetupView: View {
                 switch setup.stage {
                 case .scanning: busy("Looking for AI tools on this Mac…")
                 case .pick:     pick
+                case .signingIn: signingIn
                 case .testing:  busy("Checking that \(setup.selectedProvider?.name ?? "it") answers…")
                 case .done:     done
                 }
@@ -272,6 +333,8 @@ struct SetupView: View {
 
             Spacer(minLength: 0)
 
+            autoRunSwitch($setup.autoRun)
+
             if setup.found.isEmpty {
                 Text("Nothing found. Install one of these, then reopen Zap.")
                     .font(.callout).foregroundStyle(.secondary)
@@ -314,6 +377,24 @@ struct SetupView: View {
         .onTapGesture { setup.choose(p.id) }
     }
 
+    private func autoRunSwitch(_ on: Binding<Bool>) -> some View {
+        HStack {
+            Text("Run safe commands without asking").font(.callout)
+            Spacer()
+            Toggle("", isOn: on).labelsHidden().toggleStyle(.switch).tint(accent)
+        }
+    }
+
+    private var signingIn: some View {
+        VStack(spacing: 14) {
+            ProgressView().controlSize(.large)
+            Text("Sign in to Claude in your browser").font(.headline)
+            Text("Zap opened the sign-in for you. Once you're done there, it connects by itself.")
+                .multilineTextAlignment(.center).foregroundStyle(.secondary)
+            Button("Cancel") { setup.cancelSignIn() }.buttonStyle(.borderless).padding(.top, 6)
+        }
+    }
+
     private var done: some View {
         VStack(spacing: 16) {
             Image(systemName: "checkmark.circle.fill").font(.system(size: 40)).foregroundStyle(accent)
@@ -329,6 +410,11 @@ struct SetupView: View {
                     .background(RoundedRectangle(cornerRadius: 8).fill(card))
                     .textSelection(.enabled)
             }
+
+            autoRunSwitch(Binding(get: { setup.autoRun }, set: { setup.setAutoRun($0) }))
+            Text("Risky ones like rm or sudo still ask first.")
+                .font(.caption).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer(minLength: 0)
 

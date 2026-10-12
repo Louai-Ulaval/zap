@@ -24,7 +24,7 @@ $ /zap find every video over 1GB on my desktop
 
 1. Download `Zap.dmg` from [Releases](../../releases) and drag Zap into Applications.
 2. Open it. The first time, macOS will block it because it isn't from the App Store: go to **System Settings → Privacy & Security** and click **Open Anyway**.
-3. Pick the AI you want to use and click **Connect**.
+3. Pick the AI you want to use and click **Connect**. If you picked Claude Code and you're not signed in, Zap opens the sign-in for you and carries on once you're done.
 4. Open a new Terminal window and type `/zap` followed by whatever you want.
 
 You need at least one of these installed:
@@ -59,6 +59,8 @@ When the command shows up:
 - `e` lets you edit it first
 - anything else cancels
 
+If you'd rather not be asked every time, turn on **Run safe commands without asking** in the app (or `zap --auto on`). Safe commands then run right away. Anything risky still stops and asks.
+
 A few things it does for you:
 
 - **Shows before it runs.** Nothing happens until you say so.
@@ -72,6 +74,7 @@ Other commands:
 
 ```
 zap --use ollama llama3.2     switch AI (or open Zap.app)
+zap --auto on                 run safe commands without asking
 zap --history                 what you ran lately
 zap --version
 ```

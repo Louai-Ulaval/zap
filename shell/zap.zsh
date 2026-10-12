@@ -9,7 +9,7 @@ zap() {
   emulate -L zsh
   setopt extended_glob no_monitor no_notify local_traps
 
-  local ZAP_PROVIDER ZAP_MODEL
+  local ZAP_PROVIDER ZAP_MODEL ZAP_AUTORUN
   [[ -r $ZAP_HOME/config ]] && source $ZAP_HOME/config
   ZAP_PROVIDER=${ZAP_PROVIDER:-claude}
 
@@ -25,6 +25,7 @@ zap() {
     ''|-h|--help) _zap_help; return ;;
     -v|--version) print "zap $ZAP_VERSION, using $ZAP_PROVIDER${ZAP_MODEL:+ ($ZAP_MODEL)}"; return ;;
     --use)        _zap_use $2 $3; return ;;
+    --auto)       _zap_auto $2; return ;;
     --history)    [[ -f $ZAP_HOME/history ]] && tail -n ${2:-20} $ZAP_HOME/history; return ;;
   esac
 
@@ -45,7 +46,11 @@ zap() {
     fi
 
     _zap_show
-    _zap_confirm || return 0
+    if [[ $ZAP_AUTORUN == 1 ]] && ! _zap_risky "$_zap_code"; then
+      print -r -- "  ${_d}running…${_x}"
+    else
+      _zap_confirm || return 0
+    fi
 
     _zap_errf=$(mktemp -t zap)
     print -s -- "$_zap_code"   # up-arrow gives you the real command next time
@@ -78,6 +83,7 @@ _zap_help() {
   ${_y}/zap${_x} what's using port 3000? kill it
 
   zap --use <claude|codex|gemini|ollama> [model]   switch AI
+  zap --auto on|off                                 run safe commands without asking
   zap --history [n]                                 last runs
   zap --version
 
@@ -93,9 +99,29 @@ _zap_use() {
     print -u2 "  ${_r}$1 isn't installed (or not on your PATH)${_x}"
     return 1
   fi
-  mkdir -p $ZAP_HOME
-  print -r -- "ZAP_PROVIDER=$1"$'\n'"ZAP_MODEL=${2:-}" > $ZAP_HOME/config
+  ZAP_PROVIDER=$1 ZAP_MODEL=${2:-}
+  _zap_save
   print "  ${_g}✓${_x} zap now uses $1${2:+ ($2)}"
+}
+
+_zap_auto() {
+  case $1 in
+    on)  ZAP_AUTORUN=1 ;;
+    off) ZAP_AUTORUN=0 ;;
+    *)   [[ $ZAP_AUTORUN == 1 ]] && print "auto-run is on" || print "auto-run is off"
+         print "use: zap --auto on|off"; return ;;
+  esac
+  _zap_save
+  if [[ $1 == on ]]; then
+    print "  ${_g}✓${_x} safe commands now run right away. risky ones still ask."
+  else
+    print "  ${_g}✓${_x} zap asks before running anything again"
+  fi
+}
+
+_zap_save() {
+  mkdir -p $ZAP_HOME
+  print -r -- "ZAP_PROVIDER=$ZAP_PROVIDER"$'\n'"ZAP_MODEL=$ZAP_MODEL"$'\n'"ZAP_AUTORUN=${ZAP_AUTORUN:-0}" > $ZAP_HOME/config
 }
 
 _zap_prompt() {
