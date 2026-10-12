@@ -397,8 +397,10 @@ struct SetupView: View {
 
     private var done: some View {
         VStack(spacing: 16) {
-            Image(systemName: "checkmark.circle.fill").font(.system(size: 40)).foregroundStyle(accent)
-            Text("Zap is ready").font(.title2.bold())
+            if let url = Bundle.main.url(forResource: "flash", withExtension: "png"), let img = NSImage(contentsOf: url) {
+                Image(nsImage: img).interpolation(.none).resizable().frame(width: 72, height: 80)
+            }
+            Text("Flash is ready when you are").font(.title2.bold())
             Text("Using \(setup.active)").foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 8) {

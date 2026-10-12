@@ -22,6 +22,7 @@ rm $build/Zap-arm64 $build/Zap-x86_64
 
 cp $root/shell/zap.zsh $root/scripts/install.sh $app/Contents/Resources/
 cp $root/assets/logo/zap-icon-1024.png $app/Contents/Resources/logo.png
+cp $root/assets/flash/flash.png $app/Contents/Resources/flash.png
 
 print "making the icon…"
 iconset=$build/Zap.iconset

@@ -22,7 +22,7 @@ zap() {
   (( $# == 1 )) && [[ $1 == -* ]] && set -- ${(z)1}
 
   case $1 in
-    ''|-h|--help) _zap_help; return ;;
+    ''|-h|--help) _zap_flash_show wink; _zap_help; return ;;
     -v|--version) print "zap $ZAP_VERSION, using $ZAP_PROVIDER${ZAP_MODEL:+ ($ZAP_MODEL)}"; return ;;
     --use)        _zap_use $2 $3; return ;;
     --auto)       _zap_auto $2; return ;;
@@ -46,9 +46,7 @@ zap() {
     fi
 
     _zap_show
-    if [[ $ZAP_AUTORUN == 1 ]] && ! _zap_risky "$_zap_code"; then
-      print -r -- "  ${_d}running…${_x}"
-    else
+    if [[ $ZAP_AUTORUN != 1 ]] || _zap_risky "$_zap_code"; then
       _zap_confirm || return 0
     fi
 
@@ -165,7 +163,9 @@ _zap_ask() {
   case $ZAP_PROVIDER in
     claude)
       [[ -n $ZAP_MODEL ]] && m=(--model $ZAP_MODEL)
-      claude -p "$1" $m --tools "" </dev/null ;;
+      # skipping MCP servers, project settings and session files takes ~3s off each call
+      claude -p "$1" $m --tools "" --strict-mcp-config --setting-sources user \
+        --no-session-persistence --effort low </dev/null ;;
     codex)
       local o=$(mktemp -t zap)
       [[ -n $ZAP_MODEL ]] && m=(-m $ZAP_MODEL)
@@ -182,23 +182,28 @@ _zap_ask() {
   esac
 }
 
-# ask the AI with a spinner, print the cleaned-up answer
+# ask the AI while Flash bounces, print the cleaned-up answer
 _zap_think() {
-  local out=$(mktemp -t zap) i=0 st pid
-  local frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+  local out=$(mktemp -t zap) i=0 st pid drawn=0
+  local -a seq=(idle zap1 zap2 idle zap1 zap2 blink idle zap1 zap2 wink wink)
 
   _zap_ask "$1" >$out 2>$out.err &
   pid=$!
-  trap "kill $pid 2>/dev/null; print -nu2 '\r\e[2K\e[?25h'; rm -f $out $out.err; return 130" INT
+  trap "kill $pid 2>/dev/null; (( drawn )) && print -nu2 '\e[${_zap_flash_h}A\e[J'; print -nu2 '\e[?25h'; rm -f $out $out.err; return 130" INT
 
-  print -nu2 '\e[?25l'
-  while kill -0 $pid 2>/dev/null; do
-    print -nu2 "\r  ${_y}${frames[i % 10 + 1]}${_x} ${_d}asking $ZAP_PROVIDER…${_x}"
-    (( i++ ))
-    sleep 0.08
-  done
+  if [[ -t 2 ]]; then
+    _zap_flash_load
+    print -nu2 '\e[?25l'
+    while kill -0 $pid 2>/dev/null; do
+      (( drawn )) && print -nu2 "\e[${_zap_flash_h}A"
+      print -rnu2 -- "${_zap_flash[${seq[i % $#seq + 1]}]}"
+      drawn=1
+      (( i++ ))
+      sleep 0.09
+    done
+    print -nu2 "\e[${_zap_flash_h}A\e[J\e[?25h"
+  fi
   wait $pid; st=$?
-  print -nu2 '\r\e[2K\e[?25h'
 
   if (( st != 0 )); then
     print -u2 "  ${_r}$ZAP_PROVIDER failed:${_x}"
@@ -218,6 +223,70 @@ _zap_think() {
   s=${s%%[[:space:]]#}
   [[ $s != *$'\n'* ]] && s=${s#\$ }
   print -r -- "$s"
+}
+
+# Flash, the little spark that keeps you company while the AI thinks.
+# One character per pixel; drawn with half blocks so two pixels fit in one row.
+typeset -gA _zap_flash
+typeset -g _zap_flash_h=9
+
+_zap_flash_load() {
+  (( $#_zap_flash )) && return
+  local -A pal=( Y 220 O 208 W 230 K 235 S 229 )
+  local -a idle=(
+    "..........OOOOO."
+    ".........OYYYWO."
+    "........OYYYWO.."
+    ".......OYYYYO..."
+    "......OYYYYO...."
+    "...OOOYYYYYOOOO."
+    "..OYKKKYYYKKKYO."
+    "..OYYYYYYYYYYYO."
+    "..OYYWKYYYYWKYO."
+    "..OYYKKYYYYKKYO."
+    "..OYYYYYYYYKYYO."
+    "..OYYYYKKKKYYO.."
+    "..OOOOYYYYYOO..."
+    ".....OYYYYO....."
+    "....OYYYO......."
+    "...OYYO........."
+    "..OYO..........."
+    "..OO............"
+  )
+  local -a blink=("${idle[@]}") wink=("${idle[@]}") zap1=("${idle[@]}") zap2=("${idle[@]}")
+  blink[9]="..OYYYYYYYYYYYO."
+  wink[9]="..OYYYYYYYYWKYO."
+  zap1[4]="S......OYYYYO..."
+  zap1[8]="..OYYYYYYYYYYYOS"
+  zap1[14]=".....OYYYYO...S."
+  zap2[3]=".S......OYYYWO.."
+  zap2[11]="S.OYYYYYYYYKYYO."
+  zap2[16]="...OYYO......S.."
+
+  local name y x t b line out
+  for name in idle blink wink zap1 zap2; do
+    local -a rows=("${(@P)name}")
+    out=
+    for (( y = 1; y <= $#rows; y += 2 )); do
+      line="  "
+      for (( x = 1; x <= 16; x++ )); do
+        t=${rows[y][x]} b=${rows[y+1][x]}
+        if [[ $t == . && $b == . ]]; then line+=$'\e[0m '
+        elif [[ $b == . ]]; then line+=$'\e[0;38;5;'$pal[$t]'m▀'
+        elif [[ $t == . ]]; then line+=$'\e[0;38;5;'$pal[$b]'m▄'
+        else line+=$'\e[38;5;'$pal[$t]';48;5;'$pal[$b]'m▀'
+        fi
+      done
+      out+=$line$'\e[0m\e[K\n'
+    done
+    _zap_flash[$name]=$out
+  done
+}
+
+_zap_flash_show() {
+  [[ -t 1 ]] || return
+  _zap_flash_load
+  print -rn -- "${_zap_flash[$1]}"
 }
 
 _zap_risky() {

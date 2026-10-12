@@ -20,6 +20,12 @@ $ /zap find every video over 1GB on my desktop
 /Users/me/Desktop/render_final_v3.mov
 ```
 
+## Meet Flash
+
+<img src="assets/flash/flash.gif" width="160" align="right">
+
+Flash lives in your terminal. While the AI is working out your command he crackles and blinks next to your prompt, then gets out of the way the moment the answer shows up. Type `zap` on its own to say hi.
+
 ## Install
 
 1. Download `Zap.dmg` from [Releases](../../releases) and drag Zap into Applications.
@@ -97,7 +103,7 @@ That gives you `build/Zap.app` and `build/Zap-<version>.dmg`, built for both App
 
 ## How it works
 
-- `shell/zap.zsh` is everything that happens in Terminal. It's plain zsh, nothing to compile.
+- `shell/zap.zsh` is everything that happens in Terminal. It's plain zsh, nothing to compile. Flash is drawn there too, one character per pixel, using half blocks so two pixels fit in one row (`scripts/render-flash.py` turns the same rows into the PNG and GIF).
 - `app/ZapSetup.swift` is the setup window. It finds which AI tools you have, checks the one you pick actually answers, then runs `scripts/install.sh`.
 - `/zap` works because Zap hooks into the Enter key: a line starting with `/zap` gets quoted and passed to the `zap` function before zsh sees it. That's also why you can type apostrophes and question marks without quotes.
 
