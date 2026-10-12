@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Renders Flash from the pixel rows in shell/zap.zsh into assets/flash/
-# (a still PNG for the app and an animated GIF for the README). Needs Pillow.
+# (still PNGs for the app and an animated GIF for the README). Needs Pillow.
 import re, pathlib
 from PIL import Image
 
@@ -30,6 +30,8 @@ def draw(rows, scale, bg=None):
 out = root / "assets/flash"
 out.mkdir(parents=True, exist_ok=True)
 draw(frames["wink"], 32).save(out / "flash.png")
+for name, rows in frames.items():          # frames for the app's animation
+    draw(rows, 16).save(out / f"flash-{name}.png")
 
 seq = ["idle", "zap1", "zap2", "idle", "zap1", "zap2", "blink", "idle", "zap1", "zap2", "wink", "wink"]
 gif = [draw(frames[n], 16, (13, 13, 15, 255)).convert("RGB") for n in seq]

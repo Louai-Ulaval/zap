@@ -9,6 +9,14 @@ zap() {
   emulate -L zsh
   setopt extended_glob no_monitor no_notify local_traps
 
+  # an update replaced zap.zsh: load the new one, no new Terminal window needed
+  local -a _m
+  if zstat -A _m +mtime $ZAP_HOME/zap.zsh 2>/dev/null && [[ $_m[1] != $_ZAP_MTIME ]]; then
+    source $ZAP_HOME/zap.zsh
+    zap "$@"
+    return
+  fi
+
   local ZAP_PROVIDER ZAP_MODEL ZAP_AUTORUN
   [[ -r $ZAP_HOME/config ]] && source $ZAP_HOME/config
   ZAP_PROVIDER=${ZAP_PROVIDER:-claude}
@@ -80,7 +88,7 @@ _zap_help() {
   ${_y}/zap${_x} convert the pngs in this folder to jpg
   ${_y}/zap${_x} what's using port 3000? kill it
 
-  zap --use <claude|codex|gemini|ollama> [model]   switch AI
+  zap --use <groq|cerebras|claude|codex|gemini|ollama> [model]   switch AI
   zap --auto on|off                                 run safe commands without asking
   zap --history [n]                                 last runs
   zap --version
@@ -89,11 +97,11 @@ _zap_help() {
 }
 
 _zap_use() {
-  if [[ $1 != (claude|codex|gemini|ollama) ]]; then
-    print -u2 "pick one of: claude codex gemini ollama"
+  if [[ $1 != (groq|cerebras|claude|codex|gemini|ollama) ]]; then
+    print -u2 "pick one of: groq cerebras claude codex gemini ollama"
     return 1
   fi
-  if ! (( $+commands[$1] )); then
+  if [[ $1 != (groq|cerebras) ]] && ! (( $+commands[$1] )); then
     print -u2 "  ${_r}$1 isn't installed (or not on your PATH)${_x}"
     return 1
   fi
@@ -122,25 +130,28 @@ _zap_save() {
   print -r -- "ZAP_PROVIDER=$ZAP_PROVIDER"$'\n'"ZAP_MODEL=$ZAP_MODEL"$'\n'"ZAP_AUTORUN=${ZAP_AUTORUN:-0}" > $ZAP_HOME/config
 }
 
-_zap_prompt() {
-  local req=$1 prev=$2 st=$3 err=$4 t
+_zap_rules() {
+  local t
   local -a have
   for t in brew git python3 node ffmpeg jq magick yt-dlp docker rg fd; do
     (( $+commands[$t] )) && have+=$t
   done
-
   print -r -- "You turn plain requests into shell code for macOS. The code runs in zsh, in the user's current folder.
 
 Rules:
 - Reply with the code only. No explanation, no markdown, no backticks.
 - One line whenever possible. Several lines only when it really needs a script.
 - macOS ships BSD tools: use sed -i '', stat -f, date -v and so on.
+- Apps: open -a \"Name\" to open, osascript -e 'quit app \"Name\"' to quit.
 - Extra tools you may use (they're installed): ${(j:, :)have:-none}.
 - If you need Python, call python3 with a heredoc.
 - No sudo unless the task can't work without it.
-- If the request is unclear or impossible, reply with one line starting with \"# \" that says why.
+- If the request is unclear or impossible, reply with one line starting with \"# \" that says why."
+}
 
-macOS $(sw_vers -productVersion 2>/dev/null), $(uname -m)
+_zap_prompt() {
+  local req=$1 prev=$2 st=$3 err=$4
+  print -r -- "macOS $(sw_vers -productVersion 2>/dev/null), $(uname -m)
 Folder: $PWD
 Files here: $(ls -1Ap 2>/dev/null | head -40 | tr '\n' ' ')
 
@@ -160,26 +171,61 @@ Reply with fixed code only."
 
 _zap_ask() {
   local -a m
+  local rules=$(_zap_rules)
   case $ZAP_PROVIDER in
+    groq)
+      _zap_api https://api.groq.com/openai/v1 GROQ_API_KEY ${ZAP_MODEL:-openai/gpt-oss-120b} "$rules" "$1" ;;
+    cerebras)
+      _zap_api https://api.cerebras.ai/v1 CEREBRAS_API_KEY ${ZAP_MODEL:-gpt-oss-120b} "$rules" "$1" ;;
     claude)
       [[ -n $ZAP_MODEL ]] && m=(--model $ZAP_MODEL)
       # skipping MCP servers, project settings and session files takes ~3s off each call
-      claude -p "$1" $m --tools "" --strict-mcp-config --setting-sources user \
-        --no-session-persistence --effort low </dev/null ;;
+      claude -p "$1" $m --system-prompt "$rules" --tools "" --strict-mcp-config \
+        --setting-sources user --no-session-persistence --effort low </dev/null ;;
     codex)
       local o=$(mktemp -t zap)
       [[ -n $ZAP_MODEL ]] && m=(-m $ZAP_MODEL)
-      codex exec --skip-git-repo-check -s read-only $m --output-last-message $o "$1" >/dev/null </dev/null
+      codex exec --skip-git-repo-check -s read-only $m --output-last-message $o "$rules"$'\n\n'"$1" >/dev/null </dev/null
       local st=$?; cat $o; rm -f $o; return $st ;;
     gemini)
       [[ -n $ZAP_MODEL ]] && m=(-m $ZAP_MODEL)
-      gemini $m -p "$1" </dev/null ;;
+      gemini $m -p "$rules"$'\n\n'"$1" </dev/null ;;
     ollama)
-      ollama run ${ZAP_MODEL:-llama3.2} "$1" </dev/null ;;
+      ollama run ${ZAP_MODEL:-llama3.2} "$rules"$'\n\n'"$1" </dev/null ;;
     *)
       print -u2 "unknown AI '$ZAP_PROVIDER' in $ZAP_HOME/config"
       return 1 ;;
   esac
+}
+
+# OpenAI-style chat API (Groq, Cerebras). Uses only curl and plutil, both built into macOS.
+_zap_api() {
+  local base=$1 var=$2 model=$3 sys=$4 user=$5 key extra= json
+  [[ -r $ZAP_HOME/keys ]] && key=$(sed -n "s/^$var=//p" $ZAP_HOME/keys)
+  key=${key:-${(P)var}}
+  if [[ -z $key ]]; then
+    print -u2 "no $var yet. Open Zap.app to add your free key."
+    return 1
+  fi
+  [[ $model == *gpt-oss* ]] && extra=',"reasoning_effort":"low"'
+
+  # the key goes in through a config pipe so it never shows up in `ps`
+  json=$(curl -sS --max-time 30 -K <(print -r -- "header = \"Authorization: Bearer $key\"") \
+    -H 'Content-Type: application/json' -d @- $base/chat/completions <<<"{\"model\":\"$(_zap_json $model)\",\"temperature\":0.2$extra,\"messages\":[{\"role\":\"system\",\"content\":\"$(_zap_json "$sys")\"},{\"role\":\"user\",\"content\":\"$(_zap_json "$user")\"}]}") || return 1
+
+  print -r -- "$json" | plutil -extract choices.0.message.content raw -o - - 2>/dev/null && return
+  print -r -- "$json" | plutil -extract error.message raw -o - - 2>/dev/null >&2 || print -r -- "$json" >&2
+  return 1
+}
+
+_zap_json() {
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\t'/\\t}
+  s=${s//$'\r'/}
+  print -rn -- "$s"
 }
 
 # ask the AI while Flash bounces, print the cleaned-up answer
@@ -221,13 +267,17 @@ _zap_think() {
   s=${(F)lines}
   s=${s##[[:space:]]#}
   s=${s%%[[:space:]]#}
-  [[ $s != *$'\n'* ]] && s=${s#\$ }
+  if [[ $s != *$'\n'* ]]; then
+    s=${s#\$ }
+    [[ $s == \`*\` ]] && s=${s:1:-1}   # `cmd`
+  fi
   print -r -- "$s"
 }
 
 # Flash, the little spark that keeps you company while the AI thinks.
 # One character per pixel; drawn with half blocks so two pixels fit in one row.
 typeset -gA _zap_flash
+_zap_flash=()
 typeset -g _zap_flash_h=9
 
 _zap_flash_load() {
@@ -371,3 +421,10 @@ if [[ -o interactive && -o zle && -z $_ZAP_HOOKED ]]; then
   zle -A accept-line _zap_orig_accept_line
   zle -N accept-line _zap_accept_line
 fi
+
+# remember which zap.zsh is loaded, so zap() notices updates
+zmodload -F zsh/stat b:zstat 2>/dev/null
+() {
+  local -a m
+  zstat -A m +mtime $ZAP_HOME/zap.zsh 2>/dev/null && typeset -g _ZAP_MTIME=$m[1]
+}

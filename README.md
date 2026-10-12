@@ -33,14 +33,16 @@ Flash lives in your terminal. While the AI is working out your command he crackl
 3. Pick the AI you want to use and click **Connect**. If you picked Claude Code and you're not signed in, Zap opens the sign-in for you and carries on once you're done.
 4. Open a new Terminal window and type `/zap` followed by whatever you want.
 
-You need at least one of these installed:
+Pick a brain and a model in the app. Groq is the default because it's free and answers in about half a second. Groq and Cerebras need a free key (paste it in the app; it's stored in `~/.zap/keys`, readable only by you). The others use tools you already have installed:
 
-| AI | Cost | Get it |
-|---|---|---|
-| Claude Code | Claude subscription | [docs](https://docs.anthropic.com/en/docs/claude-code/setup) |
-| Codex | ChatGPT account | [github.com/openai/codex](https://github.com/openai/codex) |
-| Gemini CLI | free with a Google account | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) |
-| Ollama | free, runs offline | [ollama.com](https://ollama.com/download) |
+| AI | Speed | Cost | Get it |
+|---|---|---|---|
+| Groq | ~0.5 s | free key | [console.groq.com/keys](https://console.groq.com/keys) |
+| Cerebras | ~0.5 s | free key | [cloud.cerebras.ai](https://cloud.cerebras.ai) |
+| Claude Code | ~4 s | Claude subscription | [docs](https://docs.anthropic.com/en/docs/claude-code/setup) |
+| Codex | slow | ChatGPT account | [github.com/openai/codex](https://github.com/openai/codex) |
+| Gemini CLI | slow | free with a Google account | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) |
+| Ollama | ~2 s | free, runs offline | [ollama.com](https://ollama.com/download) |
 
 ### Without the app
 
@@ -79,9 +81,9 @@ A few things it does for you:
 Other commands:
 
 ```
-zap --use ollama llama3.2     switch AI (or open Zap.app)
-zap --auto on                 run safe commands without asking
-zap --history                 what you ran lately
+zap --use groq openai/gpt-oss-20b   switch brain/model (or open Zap.app)
+zap --auto on                       run safe commands without asking
+zap --history                       what you ran lately
 zap --version
 ```
 
